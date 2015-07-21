@@ -1,0 +1,1 @@
+-- CREATE TABLE user(ID INT PRIMARY KEY, firstName VARCHAR(255),lastName VARCHAR(255))
