@@ -2,7 +2,12 @@ package ru.gbax.restest.entity;
 
 import javax.persistence.*;
 
+/**
+ * Пользователи
+ * Created by GBAX on 20.07.2015.
+ */
 @Entity
+@Table(name = "user")
 public class User {
 
     @Id

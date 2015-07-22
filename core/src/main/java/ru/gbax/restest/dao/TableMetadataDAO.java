@@ -7,29 +7,38 @@ import ru.gbax.restest.entity.model.FilterField;
 import ru.gbax.restest.entity.model.TableColumn;
 import ru.gbax.restest.entity.model.TableFilter;
 import ru.gbax.restest.entity.model.TableRow;
+import ru.gbax.restest.exceptions.ServiceErrorException;
 import ru.gbax.restest.utils.TableEnum;
 
+import javax.persistence.Column;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.persistence.Query;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.EntityType;
 import javax.persistence.metamodel.Metamodel;
+import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.*;
 
 /**
+ * Дао для работы с таблицами
  * Created by GBAX on 21.07.2015.
  */
 @Repository
 public class TableMetadataDAO {
 
     final static String STRING_TYPE_NAME = "string";
+    final static String LONG_TYPE_NAME = "long";
 
     @PersistenceContext
     private EntityManager entityManager;
 
-
+    /**
+     * Получение метаданных таблицы
+     * @param tableClass класс энтити
+     * @return метаданные таблицы
+     */
     public List<TableColumn> getTableMetadata(final Class tableClass) {
         EntityType<?> targetEntityType = null;
         Metamodel metamodel = entityManager.getMetamodel();
@@ -38,18 +47,45 @@ public class TableMetadataDAO {
                 targetEntityType = next;
             }
         }
+        final Field[] declaredFields = tableClass.getDeclaredFields();
         List<TableColumn> tableColumns = new ArrayList<>();
         if (targetEntityType != null) {
             for (Attribute<?, ?> attribute : targetEntityType.getAttributes()) {
                 final String name = attribute.getName();
                 final String type = attribute.getJavaType().getSimpleName();
-                tableColumns.add(new TableColumn(name, type));
+                String dbName = getDbName(declaredFields, name);
+                tableColumns.add(new TableColumn(name, type, dbName));
             }
         }
         return tableColumns;
     }
 
-    public List<TableRow> getTableRows(final TableEnum tableEnum, final TableFilter filter) {
+    /**
+     * Получение название столбца в БД
+     * @param declaredFields поля энтити
+     * @param name название поля
+     * @return
+     */
+    private String getDbName(Field[] declaredFields, String name) {
+        for (Field field : declaredFields) {
+            if (StringUtils.equalsIgnoreCase(field.getName(), name)) {
+                Column column = field.getAnnotation(Column.class);
+                if (column != null && StringUtils.isNotEmpty(column.name())) {
+                    return column.name();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Получение данных таблицы
+     * @param tableEnum
+     * @param filter
+     * @return
+     * @throws ServiceErrorException
+     */
+    public List<TableRow> getTableRows(final TableEnum tableEnum, final TableFilter filter) throws ServiceErrorException {
         if (filter.isFilterChanged()) {
             filter.setCurrentPage(1);
         }
@@ -66,23 +102,38 @@ public class TableMetadataDAO {
         return tableRows;
     }
 
-    public Integer getTableRowsCount(final TableEnum tableEnum, final TableFilter filter) {
+    /**
+     * Получение количества строк в таблице
+     * @param tableEnum
+     * @param filter
+     * @return
+     * @throws ServiceErrorException
+     */
+    public Integer getTableRowsCount(final TableEnum tableEnum, final TableFilter filter) throws ServiceErrorException {
         List rows = getData(tableEnum, filter, true);
         if (rows.size() == 1) {
             final Object o = rows.get(0);
-            BigInteger count = (BigInteger)o;
+            BigInteger count = (BigInteger) o;
             return count.intValue();
         }
         return 0;
     }
 
-    private List getData(TableEnum tableEnum, TableFilter filter, final Boolean isPageCountCalc) {
+    /**
+     * Непосредственно построение таблицы и получение из БД
+     * @param tableEnum
+     * @param filter
+     * @param isPageCountCalc
+     * @return
+     * @throws ServiceErrorException
+     */
+    private List getData(TableEnum tableEnum, TableFilter filter, final Boolean isPageCountCalc) throws ServiceErrorException {
         final List<TableColumn> tableMetadata = getTableMetadata(tableEnum.getTableClass());
         String sql;
         if (!isPageCountCalc) {
             List<String> fieldNames = new ArrayList<>();
             for (TableColumn column : tableMetadata) {
-                fieldNames.add(column.getColumn());
+                fieldNames.add(StringUtils.isNotEmpty(column.getDbName()) ? column.getDbName() : column.getColumn());
             }
             sql = String.format("select %s from %s", Joiner.on(" , ").join(fieldNames), tableEnum.getName());
         } else {
@@ -94,26 +145,23 @@ public class TableMetadataDAO {
             sqlBuilder.append(" where");
             Integer countFiedls = 0;
             for (FilterField fieldFilter : filter.getFilters()) {
-                final String field = fieldFilter.getField();
-                final TableColumn column = getColumn(tableMetadata, field);
-                if (column != null) {
-                    if (StringUtils.equalsIgnoreCase(column.getColumpType(), STRING_TYPE_NAME)) {
-                        sqlBuilder.append(String.format(" %s like ?", field));
-                    } else {
-                        sqlBuilder.append(String.format(" %s = ?", field));
-                    }
-                    if (countFiedls++ != filter.getFilters().size()-1) {
-                        sqlBuilder.append(" and");
-                    }
-                    columnFilterFieldMap.put(column, fieldFilter);
+                final TableColumn column = getColumn(tableMetadata, fieldFilter.getField());
+                String field = StringUtils.isNotEmpty(column.getDbName()) ? column.getDbName() : column.getColumn();
+                if (StringUtils.equalsIgnoreCase(column.getColumpType(), STRING_TYPE_NAME)) {
+                    sqlBuilder.append(String.format(" %s like ?", field));
                 } else {
-                    throw new IllegalArgumentException("Поле не существует");
+                    sqlBuilder.append(String.format(" %s = ?", field));
                 }
+                if (countFiedls++ != filter.getFilters().size() - 1) {
+                    sqlBuilder.append(" and");
+                }
+                columnFilterFieldMap.put(column, fieldFilter);
             }
         }
         if (!isPageCountCalc) {
-            final String sort = filter.getSort();
-            if (StringUtils.isNotEmpty(sort) && getColumn(tableMetadata, sort) != null) {
+            if (StringUtils.isNotEmpty(filter.getSort())) {
+                final TableColumn column = getColumn(tableMetadata, filter.getSort());
+                final String sort = StringUtils.isNotEmpty(column.getDbName()) ? column.getDbName() : column.getColumn();
                 String order = filter.getOrder();
                 if (StringUtils.isEmpty(order)) {
                     order = "desc";
@@ -129,6 +177,14 @@ public class TableMetadataDAO {
             for (Map.Entry<TableColumn, FilterField> fieldFilter : columnFilterFieldMap.entrySet()) {
                 if (StringUtils.equalsIgnoreCase(fieldFilter.getKey().getColumpType(), STRING_TYPE_NAME)) {
                     nativeQuery.setParameter(i++, String.format("%%%s%%", fieldFilter.getValue().getValue()));
+                } else if (StringUtils.equalsIgnoreCase(fieldFilter.getKey().getColumpType(), LONG_TYPE_NAME)) {
+                    Long longValue;
+                    try {
+                        longValue = Long.valueOf(fieldFilter.getValue().getValue());
+                    } catch (NumberFormatException e) {
+                        throw new ServiceErrorException("Неверно задан параметр", e);
+                    }
+                    nativeQuery.setParameter(i++, longValue);
                 } else {
                     nativeQuery.setParameter(i++, fieldFilter.getValue().getValue());
                 }
@@ -137,12 +193,19 @@ public class TableMetadataDAO {
         return nativeQuery.getResultList();
     }
 
-    private TableColumn getColumn(List<TableColumn> tableMetadata, String field) {
-        for (TableColumn tableColumn : tableMetadata){
+    /**
+     * Получение колонки
+     * @param tableMetadata
+     * @param field
+     * @return
+     * @throws ServiceErrorException
+     */
+    private TableColumn getColumn(List<TableColumn> tableMetadata, String field) throws ServiceErrorException {
+        for (TableColumn tableColumn : tableMetadata) {
             if (StringUtils.equalsIgnoreCase(tableColumn.getColumn(), field)) {
                 return tableColumn;
             }
         }
-        return null;
+        throw new ServiceErrorException(String.format("Поля %s не существует", field));
     }
 }

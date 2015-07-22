@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * Фильтр для таблицы
  * Created by GBAX on 21.07.2015.
  */
 public class TableFilter {

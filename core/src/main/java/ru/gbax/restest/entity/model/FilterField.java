@@ -1,6 +1,7 @@
 package ru.gbax.restest.entity.model;
 
 /**
+ * Поле для фильтрации
  * Created by GBAX on 21.07.2015.
  */
 public class FilterField {

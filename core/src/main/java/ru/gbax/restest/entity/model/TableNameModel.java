@@ -1,6 +1,7 @@
 package ru.gbax.restest.entity.model;
 
 /**
+ * Модель для списка таблиц
  * Created by GBAX on 21.07.2015.
  */
 public class TableNameModel {

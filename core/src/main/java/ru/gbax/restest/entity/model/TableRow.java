@@ -3,6 +3,7 @@ package ru.gbax.restest.entity.model;
 import java.util.List;
 
 /**
+ * Строка с данными таблицы
  * Created by GBAX on 21.07.2015.
  */
 public class TableRow {

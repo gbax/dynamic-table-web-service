@@ -3,6 +3,7 @@ package ru.gbax.restest.entity.model;
 import java.util.List;
 
 /**
+ * Данные таблицы
  * Created by GBAX on 22.07.2015.
  */
 public class TableData {
@@ -13,6 +14,10 @@ public class TableData {
     public TableData(List<TableRow> data, Integer pageCount) {
         this.data = data;
         this.pageCount = pageCount;
+    }
+
+    public TableData(List<TableRow> data) {
+        this.data = data;
     }
 
     public List<TableRow> getData() {

@@ -18,7 +18,8 @@ var Table = (function () {
             success: function (defaultFilter) {
                 filter = defaultFilter;
                 filter.tableName = tableName;
-                refresh();
+                filter.filterChanged = true;
+                refresh(true);
                 drawPaginator();
             },
             error: function (jqXHR, textStatus, errorThrown) {
@@ -28,7 +29,7 @@ var Table = (function () {
 
     }
 
-    function refresh() {
+    function refresh(firstLoad) {
         $.ajax({
             type: "POST",
             url: "/restest/applyFilter",
@@ -39,15 +40,15 @@ var Table = (function () {
             success: function (tableData) {
                 var data = tableData.data;
                 fillTable(data);
-                pageCount = tableData.pageCount;
                 if (filter.filterChanged) {
+                    pageCount = tableData.pageCount;
                     filter.currentPage = 1;
                     filter.filterChanged = false;
                 }
                 drawPaginator();
             },
             error: function (textStatus, errorThrown) {
-                alert(textStatus)
+                alert(JSON.parse(textStatus.responseText).error);
             }
         });
     }
@@ -167,6 +168,11 @@ var Table = (function () {
     function clearFilter() {
         filter.filters = [];
         filter.filterChanged = true;
+        if (!!filter.sort && !!filter.order) {
+            var prevSortBtn = $("#" + filter.sort + "_" + filter.order);
+            prevSortBtn.css('color','#08c');
+            prevSortBtn.css('text-decoration','none');
+        }
         filter.sort = undefined;
         filter.order = undefined;
         $('.filter-input').val("");
