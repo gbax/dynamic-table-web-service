@@ -5,13 +5,10 @@ import org.springframework.stereotype.Service;
 import ru.gbax.restest.dao.TableMetadataDAO;
 import ru.gbax.restest.entity.model.TableColumn;
 import ru.gbax.restest.entity.model.TableFilter;
-import ru.gbax.restest.entity.model.TableNameModel;
 import ru.gbax.restest.entity.model.TableRow;
 import ru.gbax.restest.entity.model.TableData;
 import ru.gbax.restest.exceptions.ServiceErrorException;
-import ru.gbax.restest.utils.TableEnum;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,37 +25,16 @@ public class TableMetadataService {
      * Получение списка таблиц
      * @return
      */
-    public List<TableNameModel> getTableList() {
-        List<TableNameModel> tableNameModels = new ArrayList<>();
-        for (TableEnum tableEnum : TableEnum.values()) {
-            tableNameModels.add(new TableNameModel(tableEnum.getName(), tableEnum.getTranslateName()));
-        }
-        return tableNameModels;
+    public List<String> getTableList() {
+        return tableMetadataDAO.getTableList();
     }
 
     /**
      * Получение метаданных таблицы
-     * @param tableEnum
      * @return
      */
-    public List<TableColumn> getTableMetadata(final TableEnum tableEnum) {
-        return tableMetadataDAO.getTableMetadata(tableEnum.getTableClass());
-    }
-
-    /**
-     * Получение вспомогательные данных
-     * @param tableName
-     * @return
-     * @throws ServiceErrorException
-     */
-    public TableEnum getTableName(final String tableName) throws ServiceErrorException {
-        final TableEnum tableEnum = TableEnum.getByName(tableName);
-        if (tableEnum == null) {
-            throw new ServiceErrorException("Неверно указано название таблицы");
-        } else {
-            return tableEnum;
-        }
-
+    public List<TableColumn> getTableMetadata(final String tableName) throws ServiceErrorException {
+        return tableMetadataDAO.getTableMetadata(tableName);
     }
 
     /**
@@ -68,10 +44,9 @@ public class TableMetadataService {
      * @throws ServiceErrorException
      */
     public TableData getTableData(final TableFilter filter) throws ServiceErrorException {
-        TableEnum tableEnum = getTableName(filter.getTableName().toUpperCase());
-        List<TableRow> tableRows = tableMetadataDAO.getTableRows(tableEnum, filter);
+        List<TableRow> tableRows = tableMetadataDAO.getTableRows(filter);
         if (filter.isFilterChanged()) {
-            Integer tableRowsCount = tableMetadataDAO.getTableRowsCount(tableEnum, filter);
+            Integer tableRowsCount = tableMetadataDAO.getTableRowsCount(filter);
             Integer pageCount = (tableRowsCount + TableFilter.PAGE_SIZE - 1) / TableFilter.PAGE_SIZE;
             return new TableData(tableRows, pageCount);
         } else {

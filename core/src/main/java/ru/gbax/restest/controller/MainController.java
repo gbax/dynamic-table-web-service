@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 import ru.gbax.restest.entity.model.*;
 import ru.gbax.restest.exceptions.ServiceErrorException;
 import ru.gbax.restest.services.TableMetadataService;
-import ru.gbax.restest.utils.TableEnum;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -74,7 +73,7 @@ public class MainController {
      */
     @RequestMapping(value = "/", method = RequestMethod.GET)
     public String index(Model model) {
-        final List<TableNameModel> tablesList = tableMetadataService.getTableList();
+        final List<String> tablesList = tableMetadataService.getTableList();
         model.addAttribute("tablesList", tablesList);
         return "index";
     }
@@ -89,12 +88,10 @@ public class MainController {
      */
     @RequestMapping(value = "/table/{tableName}", method = RequestMethod.GET)
     public String showTable(@PathVariable("tableName") String tableName, Model model) throws ServiceErrorException {
-        TableEnum tableEnum = tableMetadataService.getTableName(tableName.toUpperCase());
-        final List<TableColumn> tableMetadata = tableMetadataService.getTableMetadata(tableEnum);
-        final List<TableNameModel> tableList = tableMetadataService.getTableList();
+        final List<TableColumn> tableMetadata = tableMetadataService.getTableMetadata(tableName);
+        final List<String> tableList = tableMetadataService.getTableList();
         model.addAttribute("tablesList", tableList);
-        model.addAttribute("tableName", tableEnum.getName());
-        model.addAttribute("tableTranslatedName", tableEnum.getTranslateName());
+        model.addAttribute("tableName", tableName);
         model.addAttribute("structure", tableMetadata);
         return "index";
     }

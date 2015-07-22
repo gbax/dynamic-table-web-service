@@ -21,13 +21,13 @@
         </button>
         <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
         <#list tablesList as tabledata>
-            <li><a href="<@spring.url "/table/${tabledata.name}"/>">${tabledata.translateName}</a></li>
+            <li><a href="<@spring.url "/table/${tabledata}"/>">${tabledata}</a></li>
         </#list>
         </ul>
     </div>
 
 <#if tableName??>
-    <h4>Таблица <b>${tableTranslatedName}</b></h4>
+    <h4>Таблица <b>${tableName}</b></h4>
     <div class="row">
         <input class="btn pull-right" type="button" onclick="Table.clearFilter()" value="Сбросить фильтр">
     </div>

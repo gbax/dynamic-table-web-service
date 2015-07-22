@@ -8,16 +8,10 @@ import ru.gbax.restest.entity.model.TableColumn;
 import ru.gbax.restest.entity.model.TableFilter;
 import ru.gbax.restest.entity.model.TableRow;
 import ru.gbax.restest.exceptions.ServiceErrorException;
-import ru.gbax.restest.utils.TableEnum;
 
-import javax.persistence.Column;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.persistence.Query;
-import javax.persistence.metamodel.Attribute;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.Metamodel;
-import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.*;
 
@@ -28,68 +22,53 @@ import java.util.*;
 @Repository
 public class TableMetadataDAO {
 
-    final static String STRING_TYPE_NAME = "string";
-    final static String LONG_TYPE_NAME = "long";
+    final static String STRING_TYPE_NAME = "VARCHAR_IGNORECASE";
+    final static String LONG_TYPE_NAME = "INTEGER";
 
     @PersistenceContext
     private EntityManager entityManager;
 
     /**
      * Получение метаданных таблицы
-     * @param tableClass класс энтити
+     *
+     * @param tableName название энтити
      * @return метаданные таблицы
      */
-    public List<TableColumn> getTableMetadata(final Class tableClass) {
-        EntityType<?> targetEntityType = null;
-        Metamodel metamodel = entityManager.getMetamodel();
-        for (final EntityType<?> next : metamodel.getEntities()) {
-            if (next.getJavaType().equals(tableClass)) {
-                targetEntityType = next;
-            }
-        }
-        final Field[] declaredFields = tableClass.getDeclaredFields();
+    public List<TableColumn> getTableMetadata(final String tableName) throws ServiceErrorException {
+        isTableExist(tableName, getTableList());
         List<TableColumn> tableColumns = new ArrayList<>();
-        if (targetEntityType != null) {
-            for (Attribute<?, ?> attribute : targetEntityType.getAttributes()) {
-                final String name = attribute.getName();
-                final String type = attribute.getJavaType().getSimpleName();
-                String dbName = getDbName(declaredFields, name);
-                tableColumns.add(new TableColumn(name, type, dbName));
-            }
+        final String sql = String.format("SELECT COLUMN_NAME, TYPE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='%s'", tableName);
+        final Query nativeQuery = entityManager.createNativeQuery(sql);
+        final List rows = nativeQuery.getResultList();
+        for (Object row : rows) {
+            Object[] cols = (Object[]) row;
+            tableColumns.add(new TableColumn((String)cols[0], (String)cols[1]));
         }
         return tableColumns;
     }
 
-    /**
-     * Получение название столбца в БД
-     * @param declaredFields поля энтити
-     * @param name название поля
-     * @return
-     */
-    private String getDbName(Field[] declaredFields, String name) {
-        for (Field field : declaredFields) {
-            if (StringUtils.equalsIgnoreCase(field.getName(), name)) {
-                Column column = field.getAnnotation(Column.class);
-                if (column != null && StringUtils.isNotEmpty(column.name())) {
-                    return column.name();
-                }
-            }
-        }
-        return null;
+    private void isTableExist(String tableName, List<String> tableList) throws ServiceErrorException {
+         for (String name : tableList) {
+             if (StringUtils.equalsIgnoreCase(name, tableName)) {
+                 return;
+             }
+         }
+        throw new ServiceErrorException(String.format("Таблица %s не существует", tableName));
     }
+
 
     /**
      * Получение данных таблицы
-     * @param tableEnum
+     *
      * @param filter
      * @return
      * @throws ServiceErrorException
      */
-    public List<TableRow> getTableRows(final TableEnum tableEnum, final TableFilter filter) throws ServiceErrorException {
+    public List<TableRow> getTableRows(final TableFilter filter) throws ServiceErrorException {
         if (filter.isFilterChanged()) {
             filter.setCurrentPage(1);
         }
-        List rows = getData(tableEnum, filter, false);
+        List rows = getData(filter, false);
         List<TableRow> tableRows = new ArrayList<>();
         for (Object row : rows) {
             Object[] cols = (Object[]) row;
@@ -104,13 +83,13 @@ public class TableMetadataDAO {
 
     /**
      * Получение количества строк в таблице
-     * @param tableEnum
+     *
      * @param filter
      * @return
      * @throws ServiceErrorException
      */
-    public Integer getTableRowsCount(final TableEnum tableEnum, final TableFilter filter) throws ServiceErrorException {
-        List rows = getData(tableEnum, filter, true);
+    public Integer getTableRowsCount(final TableFilter filter) throws ServiceErrorException {
+        List rows = getData(filter, true);
         if (rows.size() == 1) {
             final Object o = rows.get(0);
             BigInteger count = (BigInteger) o;
@@ -120,24 +99,25 @@ public class TableMetadataDAO {
     }
 
     /**
-     * Непосредственно построение таблицы и получение из БД
-     * @param tableEnum
+     * Непосредственно построение запроса и получение из БД
+     *
      * @param filter
      * @param isPageCountCalc
      * @return
      * @throws ServiceErrorException
      */
-    private List getData(TableEnum tableEnum, TableFilter filter, final Boolean isPageCountCalc) throws ServiceErrorException {
-        final List<TableColumn> tableMetadata = getTableMetadata(tableEnum.getTableClass());
+    private List getData(TableFilter filter, final Boolean isPageCountCalc) throws ServiceErrorException {
+        final String tableName = filter.getTableName();
+        final List<TableColumn> tableMetadata = getTableMetadata(tableName);
         String sql;
         if (!isPageCountCalc) {
             List<String> fieldNames = new ArrayList<>();
             for (TableColumn column : tableMetadata) {
-                fieldNames.add(StringUtils.isNotEmpty(column.getDbName()) ? column.getDbName() : column.getColumn());
+                fieldNames.add(column.getColumn());
             }
-            sql = String.format("select %s from %s", Joiner.on(" , ").join(fieldNames), tableEnum.getName());
+            sql = String.format("select %s from %s", Joiner.on(" , ").join(fieldNames), tableName);
         } else {
-            sql = String.format("select count(*) from %s", tableEnum.getName());
+            sql = String.format("select count(*) from %s", tableName);
         }
         StringBuilder sqlBuilder = new StringBuilder(sql);
         Map<TableColumn, FilterField> columnFilterFieldMap = new LinkedHashMap<>();
@@ -146,7 +126,7 @@ public class TableMetadataDAO {
             Integer countFiedls = 0;
             for (FilterField fieldFilter : filter.getFilters()) {
                 final TableColumn column = getColumn(tableMetadata, fieldFilter.getField());
-                String field = StringUtils.isNotEmpty(column.getDbName()) ? column.getDbName() : column.getColumn();
+                String field = column.getColumn();
                 if (StringUtils.equalsIgnoreCase(column.getColumpType(), STRING_TYPE_NAME)) {
                     sqlBuilder.append(String.format(" %s like ?", field));
                 } else {
@@ -161,7 +141,7 @@ public class TableMetadataDAO {
         if (!isPageCountCalc) {
             if (StringUtils.isNotEmpty(filter.getSort())) {
                 final TableColumn column = getColumn(tableMetadata, filter.getSort());
-                final String sort = StringUtils.isNotEmpty(column.getDbName()) ? column.getDbName() : column.getColumn();
+                final String sort = column.getColumn();
                 String order = filter.getOrder();
                 if (StringUtils.isEmpty(order)) {
                     order = "desc";
@@ -195,6 +175,7 @@ public class TableMetadataDAO {
 
     /**
      * Получение колонки
+     *
      * @param tableMetadata
      * @param field
      * @return
@@ -207,5 +188,16 @@ public class TableMetadataDAO {
             }
         }
         throw new ServiceErrorException(String.format("Поля %s не существует", field));
+    }
+
+    public List<String> getTableList() {
+        final Query nativeQuery =
+                entityManager.createNativeQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_CLASS='org.h2.table.RegularTable'");
+        final List rows = nativeQuery.getResultList();
+        List<String> result = new ArrayList<>();
+        for (Object row : rows) {
+            result.add((String)row);
+        }
+        return result;
     }
 }

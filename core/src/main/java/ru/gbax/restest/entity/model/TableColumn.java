@@ -8,12 +8,10 @@ public class TableColumn {
 
     private String column;
     private String columpType;
-    private String dbName;
 
-    public TableColumn(String column, String columpType, String dbName) {
+    public TableColumn(String column, String columpType) {
         this.column = column;
         this.columpType = columpType;
-        this.dbName = dbName;
     }
 
     public String getColumn() {
@@ -30,13 +28,5 @@ public class TableColumn {
 
     public void setColumpType(String columpType) {
         this.columpType = columpType;
-    }
-
-    public String getDbName() {
-        return dbName;
-    }
-
-    public void setDbName(String dbName) {
-        this.dbName = dbName;
     }
 }
