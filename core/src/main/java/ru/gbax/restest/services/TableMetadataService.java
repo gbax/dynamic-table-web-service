@@ -7,6 +7,7 @@ import ru.gbax.restest.entity.model.TableColumn;
 import ru.gbax.restest.entity.model.TableFilter;
 import ru.gbax.restest.entity.model.TableNameModel;
 import ru.gbax.restest.entity.model.TableRow;
+import ru.gbax.restest.entity.model.TableData;
 import ru.gbax.restest.utils.TableEnum;
 
 import java.util.ArrayList;
@@ -37,8 +38,11 @@ public class TableMetadataService {
         return TableEnum.valueOf(tableName);
     }
 
-    public List<TableRow> getTableData(final TableFilter filter) {
-        final TableEnum tableEnum = TableEnum.valueOf(filter.getTableName().toUpperCase());
-        return tableMetadataDAO.getTableData(tableEnum, filter, true);
+    public TableData getTableData(final TableFilter filter) {
+        TableEnum tableEnum = TableEnum.valueOf(filter.getTableName().toUpperCase());
+        List<TableRow> tableRows = tableMetadataDAO.getTableRows(tableEnum, filter);
+        Integer tableRowsCount = tableMetadataDAO.getTableRowsCount(tableEnum, filter);
+        Integer pageCount = (tableRowsCount + TableFilter.PAGE_SIZE - 1) / TableFilter.PAGE_SIZE;
+        return new TableData(tableRows, pageCount);
     }
 }

@@ -14,7 +14,8 @@ public class TableFilter {
     private String sort;
     private String order;
     private List<FilterField> filters = new ArrayList<>();
-    private Integer currentPage = 0;
+    private Integer currentPage = 1;
+    private Boolean filterChanged = false;
 
     public String getSort() {
         return sort;
@@ -54,5 +55,13 @@ public class TableFilter {
 
     public void setTableName(String tableName) {
         this.tableName = tableName;
+    }
+
+    public Boolean isFilterChanged() {
+        return filterChanged;
+    }
+
+    public void setFilterChanged(Boolean filterChanged) {
+        this.filterChanged = filterChanged;
     }
 }

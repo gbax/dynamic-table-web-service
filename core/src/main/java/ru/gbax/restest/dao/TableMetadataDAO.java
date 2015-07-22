@@ -15,6 +15,7 @@ import javax.persistence.Query;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.EntityType;
 import javax.persistence.metamodel.Metamodel;
+import java.math.BigInteger;
 import java.util.*;
 
 /**
@@ -48,13 +49,45 @@ public class TableMetadataDAO {
         return tableColumns;
     }
 
-    public List<TableRow> getTableData(final TableEnum tableEnum, final TableFilter filter, final Boolean needPaging) {
-        final List<TableColumn> tableMetadata = getTableMetadata(tableEnum.getTableClass());
-        List<String> fieldNames = new ArrayList<>();
-        for (TableColumn column : tableMetadata) {
-            fieldNames.add(column.getColumn());
+    public List<TableRow> getTableRows(final TableEnum tableEnum, final TableFilter filter) {
+        if (filter.isFilterChanged()) {
+            filter.setCurrentPage(1);
         }
-        String sql = String.format("select %s from %s", Joiner.on(" , ").join(fieldNames), tableEnum.getName());
+        List rows = getData(tableEnum, filter, false);
+        List<TableRow> tableRows = new ArrayList<>();
+        for (Object row : rows) {
+            Object[] cols = (Object[]) row;
+            List<String> tableCols = new ArrayList<>();
+            for (Object col : cols) {
+                tableCols.add(col.toString());
+            }
+            tableRows.add(new TableRow(tableCols));
+        }
+        return tableRows;
+    }
+
+    public Integer getTableRowsCount(final TableEnum tableEnum, final TableFilter filter) {
+        List rows = getData(tableEnum, filter, true);
+        if (rows.size() == 1) {
+            final Object o = rows.get(0);
+            BigInteger count = (BigInteger)o;
+            return count.intValue();
+        }
+        return 0;
+    }
+
+    private List getData(TableEnum tableEnum, TableFilter filter, final Boolean isPageCountCalc) {
+        final List<TableColumn> tableMetadata = getTableMetadata(tableEnum.getTableClass());
+        String sql;
+        if (!isPageCountCalc) {
+            List<String> fieldNames = new ArrayList<>();
+            for (TableColumn column : tableMetadata) {
+                fieldNames.add(column.getColumn());
+            }
+            sql = String.format("select %s from %s", Joiner.on(" , ").join(fieldNames), tableEnum.getName());
+        } else {
+            sql = String.format("select count(*) from %s", tableEnum.getName());
+        }
         StringBuilder sqlBuilder = new StringBuilder(sql);
         Map<TableColumn, FilterField> columnFilterFieldMap = new LinkedHashMap<>();
         if (filter.getFilters().size() > 0) {
@@ -78,13 +111,17 @@ public class TableMetadataDAO {
                 }
             }
         }
-        final String sort = filter.getSort();
-        if (StringUtils.isNotEmpty(sort) && getColumn(tableMetadata, sort) != null) {
-            String order = filter.getOrder();
-            if (StringUtils.isEmpty(order)) {
-                order = "desc";
+        if (!isPageCountCalc) {
+            final String sort = filter.getSort();
+            if (StringUtils.isNotEmpty(sort) && getColumn(tableMetadata, sort) != null) {
+                String order = filter.getOrder();
+                if (StringUtils.isEmpty(order)) {
+                    order = "desc";
+                }
+                sqlBuilder.append(String.format(" order by %s %s", sort, order));
             }
-            sqlBuilder.append(String.format(" order by %s %s", sort, order));
+            Integer offset = (filter.getCurrentPage() - 1) * TableFilter.PAGE_SIZE;
+            sqlBuilder.append(String.format(" limit %s offset %s", TableFilter.PAGE_SIZE, offset));
         }
         final Query nativeQuery = entityManager.createNativeQuery(sqlBuilder.toString());
         if (filter.getFilters().size() > 0) {
@@ -93,21 +130,11 @@ public class TableMetadataDAO {
                 if (StringUtils.equalsIgnoreCase(fieldFilter.getKey().getColumpType(), STRING_TYPE_NAME)) {
                     nativeQuery.setParameter(i++, String.format("%%%s%%", fieldFilter.getValue().getValue()));
                 } else {
-                    nativeQuery.setParameter(i++, fieldFilter.getValue());
+                    nativeQuery.setParameter(i++, fieldFilter.getValue().getValue());
                 }
             }
         }
-        List rows = nativeQuery.getResultList();
-        List<TableRow> tableRows = new ArrayList<>();
-        for (Object row : rows) {
-            Object[] cols = (Object[]) row;
-            List<String> tableCols = new ArrayList<>();
-            for (Integer i = 0; i < cols.length; i++) {
-                 tableCols.add(cols[i].toString());
-            }
-            tableRows.add(new TableRow(tableCols));
-        }
-        return tableRows;
+        return nativeQuery.getResultList();
     }
 
     private TableColumn getColumn(List<TableColumn> tableMetadata, String field) {

@@ -1,14 +1,15 @@
-var Utils = (function () {
+var Table = (function () {
 
     var filter;
     var table;
     var tableBody;
     var pageCount;
+    var pagination;
 
-    function load(tableName, tablePageCount) {
-        pageCount = tablePageCount;
+    function load(tableName) {
         table = $('.table');
         tableBody = table.children('tbody');
+        pagination = $('.pagination > ul');
         $.ajax({
             type: "GET",
             url: "/restest/defaultFilter",
@@ -17,7 +18,8 @@ var Utils = (function () {
             success: function (defaultFilter) {
                 filter = defaultFilter;
                 filter.tableName = tableName;
-                applyFilter();
+                refresh();
+                drawPaginator();
             },
             error: function (jqXHR, textStatus, errorThrown) {
                 alert("Error: " + textStatus + " errorThrown: " + errorThrown);
@@ -26,7 +28,7 @@ var Utils = (function () {
 
     }
 
-    function applyFilter() {
+    function refresh() {
         $.ajax({
             type: "POST",
             url: "/restest/applyFilter",
@@ -34,9 +36,15 @@ var Utils = (function () {
             dataType: "json",
             async: false,
             data: JSON.stringify(filter),
-            success: function (data) {
-                tableBody.empty();
+            success: function (tableData) {
+                var data = tableData.data;
                 fillTable(data);
+                pageCount = tableData.pageCount;
+                if (filter.filterChanged) {
+                    filter.currentPage = 1;
+                    filter.filterChanged = false;
+                }
+                drawPaginator();
             },
             error: function (textStatus, errorThrown) {
                 alert(textStatus)
@@ -45,6 +53,7 @@ var Utils = (function () {
     }
 
     function fillTable(data) {
+        tableBody.empty();
         data.forEach(function (row) {
             var tRow = '<tr>';
             row.values.forEach(function (col) {
@@ -68,31 +77,109 @@ var Utils = (function () {
         var curSortBtn = $("#" + column + "_" + order);
         curSortBtn.css('color','#800035');
         curSortBtn.css('text-decoration','underline');
-        applyFilter();
+        refresh();
     }
 
     function filterTable(column) {
         var value = $("#"+column+"_filter").val();
-        var foundedIndex;
-        var findedFilter = $.grep(filter.filters, function(n, i) {
-            foundedIndex = i;
+        var findedFilter = $.grep(filter.filters, function(n) {
+
             return n.field === column;
         });
         if (findedFilter.length == 1) {
             if (!value) {
-                filter.filters.splice(foundedIndex, 1);
+                filter.filters.splice(filter.filters.indexOf(findedFilter[0]), 1);
             } else {
                 findedFilter[0].value = value;
             }
+            filter.filterChanged = true;
         } else {
-            filter.filters.push({field: column, value: value});
+            if (!!value) {
+                filter.filters.push({field: column, value: value});
+                filter.filterChanged = true;
+            }
         }
-        applyFilter();
+        refresh();
+    }
+
+    function drawPaginator() {
+        var COUNT_PAGES = 5;
+        var COUNT_SIDE = 2;
+        pagination.empty();
+        var curP = filter.currentPage;
+        if (pageCount > 1) {
+            var downR = curP - COUNT_SIDE;
+            var upR = curP + COUNT_SIDE;
+            if (downR < 1) {
+                downR = 1;
+                if (pageCount < COUNT_PAGES) {
+                    upR = pageCount;
+                } else {
+                    upR = COUNT_PAGES;
+                }
+            } else {
+                if (upR > pageCount) {
+                    upR = pageCount;
+                    if (pageCount <= COUNT_PAGES) {
+                        downR = 1;
+                    } else {
+                        downR = (upR - COUNT_PAGES) + 1;
+                    }
+                }
+            }
+            var pages;
+            if (curP == 1) {
+                pages = '<li class="disabled"><a href="#">Пред</a></li>';
+            } else {
+                pages = '<li><a href="#" onclick="Table.setPrevPage()">Пред</a></li>';
+            }
+            for (var i = downR; i <= upR; i++) {
+                if (i == curP) {
+                    pages += '<li class="active"><a href="#" onclick="Table.changePage('+i+')">'+i+'</a></li>';
+                } else {
+                    pages += '<li><a href="#" onclick="Table.changePage('+i+')">'+i+'</a></li>';
+                }
+            }
+            if (curP == pageCount) {
+                pages += '<li class="disabled"><a href="#">След</a></li>';
+            } else {
+                pages += '<li><a href="#" onclick="Table.setNextPage()">След</a></li>';
+            }
+        }
+        pagination.append(pages);
+    }
+
+    function changePage(page) {
+        filter.currentPage = page;
+        refresh();
+    }
+
+    function setNextPage() {
+        filter.currentPage++;
+        refresh();
+    }
+
+    function setPrevPage() {
+        filter.currentPage--;
+        refresh();
+    }
+
+    function clearFilter() {
+        filter.filters = [];
+        filter.filterChanged = true;
+        filter.sort = undefined;
+        filter.order = undefined;
+        $('.filter-input').val("");
+        refresh();
     }
 
     return {
         load: load,
         sorting: sorting,
-        filter: filterTable
+        filter: filterTable,
+        changePage: changePage,
+        setNextPage: setNextPage,
+        setPrevPage: setPrevPage,
+        clearFilter: clearFilter
     };
 })();

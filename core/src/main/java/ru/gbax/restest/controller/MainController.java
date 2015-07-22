@@ -7,10 +7,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
-import ru.gbax.restest.entity.model.TableColumn;
-import ru.gbax.restest.entity.model.TableFilter;
-import ru.gbax.restest.entity.model.TableNameModel;
-import ru.gbax.restest.entity.model.TableRow;
+import ru.gbax.restest.entity.model.*;
 import ru.gbax.restest.services.TableMetadataService;
 import ru.gbax.restest.utils.TableEnum;
 
@@ -33,7 +30,7 @@ public class MainController {
 
     @RequestMapping(value = "/applyFilter", method = RequestMethod.POST)
 	@ResponseBody
-    public List<TableRow> applyFilter(@RequestBody TableFilter filter) {
+    public TableData applyFilter(@RequestBody TableFilter filter) {
         return tableMetadataService.getTableData(filter);
     }
 
